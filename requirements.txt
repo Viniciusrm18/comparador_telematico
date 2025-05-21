@@ -1,3 +1,4 @@
-git add requirements.txt
-git commit -m "Adiciona requirements.txt para deploy no Streamlit"
-git push
+streamlit
+pandas
+openpyxl
+xlrd
