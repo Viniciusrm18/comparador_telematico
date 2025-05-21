@@ -297,7 +297,11 @@ def detectar_cabecalho(file, filename, max_linhas=15):
 
 # --- Complementares ---
 
-if st.session_state.file_blocks and data_types_to_process:
+# Checar se todos os blocos possuem pelo menos um arquivo
+blocos_preenchidos = all(bool(arquivos) for arquivos in st.session_state.file_blocks.values())
+
+if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos:
+
     st.header("Dados Complementares")
     selected_complementary = st.multiselect(
         "Selecione os campos complementares (opcional):",
