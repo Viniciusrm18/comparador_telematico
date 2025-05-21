@@ -236,6 +236,7 @@ with st.expander("Clique para Ajuda e Objetivo da Ferramenta"):
         2. Envie os arquivos separados por blocos (ex: Local A, Local B).
         3. Selecione os dados complementares.
         4. Clique em "Processar Dados e Cruzar".
+        Obs: Cada Bloco de análise é referente a uma ERB ou antena, por isso é necessário colocar as planilhas de cada antena em blocos separados para o sistema realizar o cruzamento de dados entre os blocos.
         
         **Níveis de Confiança nos Dados:**
         - **Alta (Verde)**: Dados em formato padrão completo
