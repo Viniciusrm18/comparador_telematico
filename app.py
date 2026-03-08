@@ -8,69 +8,90 @@ import os
 
 # --- Funções Aprimoradas para Normalização ---
 
+def _limpar_valor_excel(valor):
+    """Remove sufixos de float (.0), trata notação científica e espaços de valores vindos do Excel."""
+    if pd.isna(valor): return ""
+    v_str = str(valor).strip()
+    
+    # Se parecer número (incluindo notação científica), converter para inteiro e depois string
+    if re.match(r'^-?\d+(\.\d+)?([eE][-+]?\d+)?$', v_str):
+        try:
+            return '{:.0f}'.format(float(valor))
+        except (ValueError, TypeError):
+            pass
+            
+    if v_str.endswith('.0'): v_str = v_str[:-2]
+    return v_str
+
 def normalizar_telefone(numero, strict=False):
     """
-    Normaliza números de telefone com diferentes níveis de rigor.
-    
-    Args:
-        numero: O número a ser normalizado
-        strict: Se True, aplica regras estritas; se False, é mais permissivo
-        
-    Returns:
-        Tupla (numero_normalizado, confianca) onde confianca é 'alta', 'média' ou 'baixa'
+    Normaliza números de telefone com foco no padrão brasileiro e lida com o 9º dígito.
     """
-    if pd.isna(numero): return None, None
+    v_limpo = _limpar_valor_excel(numero)
+    if not v_limpo: return None, None
 
-    numero_str = str(numero).strip()
-    numero_limpo = re.sub(r"[^\d]", "", numero_str)
+    # Remove tudo que não é dígito
+    numero_limpo = re.sub(r"[^\d]", "", v_limpo)
 
     if not numero_limpo or len(numero_limpo) < 8:
         return None, None
 
-    # Prefixos de centrais a ignorar
-    # Nenhum prefixo está sendo atualmente excluído, regra mantida apenas por compatibilidade estrutural
-    prefixos_invalidos = ["00000000000000000000000000"]
-    if any(numero_limpo.startswith(p) for p in prefixos_invalidos):
+    # NOVO: Filtro para números de centrais/inválidos (ex: 00000000, 11111111)
+    # Se todos os dígitos forem iguais, ignora
+    if len(set(numero_limpo)) == 1:
         return None, None
 
-    # Alta confiança: número com prefixo internacional completo
-    if numero_limpo.startswith("55") and len(numero_limpo) in [12, 13]:
-        return "+" + numero_limpo, "alta"
+    # Remove prefixo 0 inicial se houver
+    if numero_limpo.startswith("0") and len(numero_limpo) > 10:
+        numero_limpo = numero_limpo[1:]
 
-    # Alta confiança: número com 0 inicial (ex: 081991234567)
-    if numero_limpo.startswith("0") and len(numero_limpo) >= 11:
-        return "+55" + numero_limpo[1:], "alta"
+    # Remove prefixo 55 (Brasil) se houver
+    if numero_limpo.startswith("55") and len(numero_limpo) >= 12:
+        numero_limpo = numero_limpo[2:]
 
-    # Alta confiança: número com DDD local (ex: 81991234567)
+    # Casos de números nacionais (com DDD)
     if 10 <= len(numero_limpo) <= 11:
-        return "+55" + numero_limpo, "alta"
+        # Se tem 10 dígitos, avaliar se deve adicionar o 9 (celular)
+        if len(numero_limpo) == 10:
+            ddd = numero_limpo[:2]
+            prefixo = numero_limpo[2]
+            # No Brasil, celulares começam com 6, 7, 8 ou 9
+            if prefixo in ['6', '7', '8', '9']:
+                numero_normalizado = "+55" + ddd + "9" + numero_limpo[2:]
+                return numero_normalizado, "média"
+            else:
+                return "+55" + numero_limpo, "alta"
+        
+        # Se tem 11 dígitos, verificar se o 9 está no lugar certo
+        if len(numero_limpo) == 11:
+            if numero_limpo[2] == '9':
+                return "+55" + numero_limpo, "alta"
+            else:
+                return "+55" + numero_limpo, "baixa"
 
-    # Média confiança: número nacional curto, mas ainda válido
-    elif 8 <= len(numero_limpo) < 10:
-        return "+55" + numero_limpo, "média"
-
-    # Baixa confiança: formato incompleto, mas pode conter algo relevante
-    elif 8 <= len(numero_limpo) <= 15 and not strict:
+    # Números curtos (sem DDD) - menos confiáveis para cruzamento
+    elif 8 <= len(numero_limpo) <= 9:
+        if len(numero_limpo) == 8:
+            # Tentar normalizar para 9 dígitos se for celular
+            if numero_limpo[0] in ['6', '7', '8', '9']:
+                return "9" + numero_limpo, "baixa"
         return numero_limpo, "baixa"
+
+    # Fallback para outros formatos (pode ser internacional)
+    if len(numero_limpo) > 11 and not strict:
+        return "+" + numero_limpo, "baixa"
 
     return None, None
 
 
 def normalizar_imei(imei, strict=False):
     """
-    Normaliza IMEIs com diferentes níveis de rigor.
-    
-    Args:
-        imei: O IMEI a ser normalizado
-        strict: Se True, aplica regras estritas; se False, é mais permissivo
-        
-    Returns:
-        Tupla (imei_normalizado, confianca) onde confianca é 'alta', 'média' ou 'baixa'
+    Normaliza IMEIs lidando com conversões de float do Excel.
     """
-    if pd.isna(imei): return None, None
+    v_limpo = _limpar_valor_excel(imei)
+    if not v_limpo: return None, None
     
-    imei_str = str(imei).strip()
-    imei_limpo = re.sub(r'\D', '', imei_str)
+    imei_limpo = re.sub(r'\D', '', v_limpo)
     
     if not imei_limpo:
         return None, None
@@ -79,13 +100,12 @@ def normalizar_imei(imei, strict=False):
     if len(imei_limpo) == 15:
         return imei_limpo, "alta"
     
-    # Média confiança: próximo do padrão IMEI
+    # Média confiança: próximo do padrão IMEI (14 ou 16 dígitos)
     elif 14 <= len(imei_limpo) <= 16:
         return imei_limpo[:15], "média"
     
     # Baixa confiança: potencialmente um IMEI, mas formato não padrão
     elif len(imei_limpo) >= 8 and not strict:
-        # Casos como datas (convertidas em números) ainda podem ser relevantes
         return imei_limpo, "baixa"
     
     return None, None
@@ -170,22 +190,25 @@ def normalizar_id_localizacao(id_str, strict=False):
 
 COLUNA_MAP_HEURISTICO = {
     "Extratos de ERBs": {
-        "telefone": ["telefone", "fone", "numero", "tel", "terminal", "msisdn", "número", "celular"],
-        "imei": ["imei", "terminal id", "terminal_id", "id", "equipamento", "aparelho"]
+        "telefone": [
+            "telefone", "fone", "numero", "tel", "terminal", "msisdn", "número", "celular", 
+            "calling", "called", "origem", "destino", "caller", "callee", "dialed", "chamador", "chamado",
+            "a_party", "b_party", "address", "orig", "dest", "v_msisdn_origem", "v_msisdn_destino",
+            "number", "contact", "contato", "phone", "mobile", "movel", "alvo", "interceptado", "interlocutor"
+        ],
+        "imei": [
+            "imei", "terminal id", "terminal_id", "id", "equipamento", "aparelho", "device", "serial",
+            "esn", "meid", "identificador_equipamento", "hardware", "equip"
+        ]
     },
     "Dados de Contas Online (Google Location)": {
-        "id_localizacao": ["location id", "obfuscated id", "id", "identifier", "locid"],
-        "email": ["email", "conta google", "gmail", "conta", "e-mail", "endereco", "endereço"],
+        "id_localizacao": ["location id", "obfuscated id", "id", "identifier", "locid", "gaia", "user_id"],
+        "email": [
+            "email", "conta google", "gmail", "conta", "e-mail", "endereco", "endereço", 
+            "login", "user", "username", "usuario", "usuário", "mail", "address", "principal", "recovery"
+        ],
         "hash": ["hash", "md5", "sha1", "sha256", "sha512", "checksum", "digest"]
     }
-}
-
-COMPLEMENTAR_MAP_HEURISTICO = {
-    "nome": ["nome", "titular", "assinante", "usuário", "usuario", "cliente", "person", "name"],
-    "cpf": ["cpf", "cnpj", "documento", "doc", "documentos", "identification", "id"],
-    "email_contato": ["email_contato", "contato", "contact", "alt_email", "email alternativo"],
-    "data_hora": ["data", "hora", "timestamp", "time", "date", "datetime", "datahora"],
-    "localizacao": ["endereco", "bairro", "cidade", "uf", "erb", "siteid", "location", "endereço", "localidade", "local", "address"]
 }
 
 # --- Configuração da Página ---
@@ -234,7 +257,7 @@ with st.expander("Clique para Ajuda e Objetivo da Ferramenta"):
         **Passos:**
         1. Escolha o tipo de análise (ERBs ou Contas Google).
         2. Envie os arquivos separados por blocos (ex: Local A, Local B).
-        3. Selecione os dados complementares.
+        3. O sistema identificará automaticamente Colunas de Origem/Destino/IMEI.
         4. Clique em "Processar Dados e Cruzar".
     
         Obs: Cada Bloco de análise é referente a uma ERB ou antena, por isso é necessário colocar as planilhas de cada antena em blocos separados para o sistema realizar o cruzamento de dados entre os blocos.
@@ -270,13 +293,18 @@ if 'file_blocks' not in st.session_state:
 if 'block_count' not in st.session_state:
     st.session_state.block_count = 0
 
-if st.button("Adicionar Bloco de Arquivos"):
-    st.session_state.block_count += 1
-    st.session_state.file_blocks[f"Bloco {st.session_state.block_count}"] = {}
+col_add, col_opt = st.columns([1, 1])
+with col_add:
+    if st.button("Adicionar Bloco de Arquivos"):
+        st.session_state.block_count += 1
+        st.session_state.file_blocks[f"Bloco {st.session_state.block_count}"] = {}
+
+with col_opt:
+    detec_interna = st.checkbox("Detectar duplicatas dentro do mesmo bloco", value=False, help="Se marcado, mostrará repetidos mesmo que estejam no mesmo grupo de arquivos.")
 
 for i in range(1, st.session_state.block_count + 1):
     block_id = f"Bloco {i}"
-    files = st.file_uploader(f"Arquivos para {block_id}", type=["csv", "xlsx"], accept_multiple_files=True, key=f"uploader_{i}")
+    files = st.file_uploader(f"Arquivos para {block_id}", type=["csv", "xlsx", "xls"], accept_multiple_files=True, key=f"uploader_{i}")
     if files:
         st.session_state.file_blocks[block_id] = {f.name: f for f in files}
 
@@ -287,11 +315,23 @@ def detectar_cabecalho(file, filename, max_linhas=15):
         file.seek(0)
         for i in range(max_linhas):
             file.seek(0)
-            if filename.endswith(".csv"):
-                df = pd.read_csv(file, header=i, nrows=5, encoding="utf-8", sep=None, engine='python')
+            if filename.lower().endswith(".csv"):
+                df = pd.read_csv(file, header=i, nrows=10, encoding="utf-8", sep=None, engine='python')
             else:
-                df = pd.read_excel(file, header=i, nrows=5)
-            if df.shape[1] >= 2 and sum("Unnamed" in str(c) for c in df.columns) < df.shape[1] // 2:
+                # Tentar ler com motores específicos para .xlsx e .xls
+                if filename.lower().endswith(".xlsx"):
+                    engine = 'openpyxl'
+                elif filename.lower().endswith(".xls"):
+                    engine = 'xlrd'
+                else:
+                    engine = None
+                df = pd.read_excel(file, header=i, nrows=10, engine=engine)
+            
+            # Heurística: cabeçalho costuma ter poucas colunas nulas e nomes significativos
+            column_names = [str(c) for c in df.columns]
+            unnamed_count = sum(1 for c in column_names if "unnamed" in c.lower() or not c.strip())
+            
+            if df.shape[1] >= 2 and unnamed_count < df.shape[1] // 1.5:
                 return i
         return 0
     except Exception:
@@ -303,12 +343,6 @@ def detectar_cabecalho(file, filename, max_linhas=15):
 blocos_preenchidos = all(bool(arquivos) for arquivos in st.session_state.file_blocks.values())
 
 if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos:
-
-    st.header("Dados Complementares")
-    selected_complementary = st.multiselect(
-        "Selecione os campos complementares (opcional):",
-        list(COMPLEMENTAR_MAP_HEURISTICO.keys()), default=[]
-    )
 
     if st.button("Processar Dados e Cruzar"):
         st.subheader("Status:")
@@ -325,11 +359,20 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                 try:
                     header_row = detectar_cabecalho(file, nome_arquivo)
                     file.seek(0)
-                    if nome_arquivo.endswith(".csv"):
+                    if nome_arquivo.lower().endswith(".csv"):
                         df = pd.read_csv(file, header=header_row, dtype=str, encoding='utf-8', sep=None, engine='python')
                     else:
-                        df = pd.read_excel(file, header=header_row, dtype=str)
-                    df = df.astype(str).replace("nan", "")
+                        if nome_arquivo.lower().endswith(".xlsx"):
+                            engine = 'openpyxl'
+                        elif nome_arquivo.lower().endswith(".xls"):
+                            engine = 'xlrd'
+                        else:
+                            engine = None
+                        df = pd.read_excel(file, header=header_row, dtype=str, engine=engine)
+                    
+                    # Limpeza inicial: remover 'nan'
+                    df = df.fillna("")
+                    # Standardizing columns
                     df.columns = [str(col).strip().lower() for col in df.columns]
                     dataframes_por_bloco.append({"df": df, "bloco": bloco_id, "nome": nome_arquivo})
                 except Exception as e:
@@ -347,7 +390,6 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                 "id_localizacao": lambda x: normalizar_id_localizacao(x, strict_mode)
             }
             map_primario = COLUNA_MAP_HEURISTICO[analysis_type]
-            map_complementar = COMPLEMENTAR_MAP_HEURISTICO
 
             # Armazenar todos os dados extraídos com seus níveis de confiança
             todos_registros = []
@@ -359,6 +401,12 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                 colunas_por_tipo = {}
                 for tipo in data_types_to_process:
                     colunas_tipo = [col for col in df.columns if any(k in col.lower() for k in map_primario[tipo])]
+                    
+                    # NOVO: SE NÃO ENCONTRAR COLUNA PELO NOME, VARRE TUDO (Varredura de Segurança)
+                    # Isso garante que mesmo que a planilha mude o nome da coluna para algo desconhecido, os dados serão capturados
+                    if not colunas_tipo:
+                        colunas_tipo = list(df.columns)
+                    
                     colunas_por_tipo[tipo] = colunas_tipo
                 
                 # Agora processamos cada linha
@@ -375,16 +423,9 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                                     "confianca": confianca,
                                     "bloco": bloco_id,
                                     "arquivo": nome_arquivo,
-                                    "valor_original": row[col]
+                                    "valor_original": row[col],
+                                    "coluna_fonte": col
                                 }
-                                
-                                # Adicionar dados complementares
-                                for comp in selected_complementary:
-                                    for comp_col in df.columns:
-                                        if any(k in comp_col.lower() for k in map_complementar[comp]):
-                                            dado[comp] = row[comp_col]
-                                            break
-                                
                                 todos_registros.append(dado)
 
             progress.progress(0.6)
@@ -402,12 +443,24 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                 cruzamentos = []
                 for valor, grupo in df_filtrado.groupby(["valor", "tipo"]):
                     blocos_unicos = grupo["bloco"].unique()
-                    if len(blocos_unicos) > 1:  # Existe em mais de um bloco
+                    arquivos_unicos = grupo["arquivo"].unique()
+                    
+                    encontrado = False
+                    if detec_interna:
+                        if len(grupo) > 1: # Qualquer repetição
+                            encontrado = True
+                    else:
+                        if len(blocos_unicos) > 1: # Repetição entre blocos diferentes
+                            encontrado = True
+                            
+                    if encontrado:
                         cruzamento = {
                             "valor": valor[0],
                             "tipo": valor[1],
-                            "confianca": grupo["confianca"].iloc[0],
+                            "confianca": grupo["confianca"].max(), # Pega a maior confiança encontrada para esse valor
                             "blocos": list(blocos_unicos),
+                            "arquivos": list(arquivos_unicos),
+                            "colunas": list(grupo["coluna_fonte"].unique()),
                             "ocorrencias": len(grupo)
                         }
                         
