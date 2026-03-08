@@ -476,6 +476,12 @@ if st.session_state.uploaded_files and data_types_to_process:
                 
                 df_cruzado = pd.DataFrame(cruzamentos)
                 
+                # Ordenar por relevância: mais ocorrências primeiro e maior confiança
+                if not df_cruzado.empty:
+                    conf_map = {"alta": 0, "média": 1, "baixa": 2}
+                    df_cruzado["_priority"] = df_cruzado["confianca"].map(conf_map)
+                    df_cruzado = df_cruzado.sort_values(by=["ocorrencias", "_priority"], ascending=[False, True]).drop(columns=["_priority"])
+                
                 # Mostrar resultados
                 if df_cruzado.empty:
                     st.warning("Nenhum cruzamento encontrado com os critérios selecionados.")
