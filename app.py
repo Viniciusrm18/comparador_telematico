@@ -383,7 +383,7 @@ def detectar_cabecalho(file, filename, max_linhas=15):
 # Checar se há arquivos
 if st.session_state.uploaded_files and data_types_to_process:
 
-    if st.button("🚀 Processar Dados e Cruzar AGORA", type="primary", use_container_width=True):
+    if st.button("Processar e Cruzar Dados", type="primary", use_container_width=True):
         st.subheader("Status:")
         status_area = st.empty()
         progress = st.progress(0.0)
