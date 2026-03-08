@@ -232,6 +232,10 @@ footer, .reportview-container .main footer {visibility: hidden;}
 .stTabs [data-baseweb="tab-list"] {gap: 2px;}
 .stTabs [data-baseweb="tab"] {height: 50px; white-space: pre-wrap; background-color: #0E1117; border-radius: 4px 4px 0 0; gap: 1px; padding-top: 10px; padding-bottom: 10px;}
 .stTabs [aria-selected="true"] {background-color: #4F8BF9;}
+/* Esconder a lista nativa do file_uploader para evitar confusão com o limite de 3 arquivos */
+[data-testid="stFileUploadDropzone"] + div {
+    display: none;
+}
 .download-btn {
     background-color: #4CAF50;
     color: white;
@@ -299,6 +303,32 @@ if new_files:
     for f in new_files:
         if f.name not in st.session_state.uploaded_files:
             st.session_state.uploaded_files[f.name] = f
+
+# Mostrar lista personalizada de arquivos (Até 20 por tela)
+if st.session_state.uploaded_files:
+    st.subheader(f"Arquivos no Acervo ({len(st.session_state.uploaded_files)})")
+    
+    arquivos_lista = sorted(list(st.session_state.uploaded_files.keys()))
+    itens_por_pagina = 20
+    
+    if len(arquivos_lista) > itens_por_pagina:
+        total_paginas = (len(arquivos_lista) // itens_por_pagina) + (1 if len(arquivos_lista) % itens_por_pagina > 0 else 0)
+        pagina = st.number_input("Página da lista de arquivos", min_value=1, max_value=total_paginas, step=1)
+        inicio = (pagina - 1) * itens_por_pagina
+        fim = inicio + itens_por_pagina
+    else:
+        inicio, fim = 0, len(arquivos_lista)
+        
+    for fname in arquivos_lista[inicio:fim]:
+        col_f, col_del = st.columns([5, 1])
+        col_f.markdown(f"✅ `{fname}`")
+        if col_del.button("❌", key=f"del_{fname}"):
+            del st.session_state.uploaded_files[fname]
+            st.rerun()
+    
+    if st.button("Limpar Todo o Acervo", type="secondary"):
+        st.session_state.uploaded_files = {}
+        st.rerun()
 
 # --- Detectar Cabeçalho ---
 
