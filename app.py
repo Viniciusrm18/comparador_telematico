@@ -521,14 +521,17 @@ if st.session_state.uploaded_files and data_types_to_process:
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.download_button(
+                        if st.download_button(
                             "📊 Baixar Planilha de Cruzamentos (XLSX)",
                             data=output_cruzamentos.getvalue(),
                             file_name="cruzamentos_telematicos.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True,
-                            on_click=lambda: (st.session_state.update({"uploaded_files": {}}), time.sleep(0.5))
-                        )
+                            use_container_width=True
+                        ):
+                            st.session_state.uploaded_files = {}
+                            st.success("Dados limpos com sucesso. Reiniciando...")
+                            time.sleep(1)
+                            st.rerun()
                     
                     # 2. Download de todos os registros extraídos
                     output_todos = io.BytesIO()
@@ -570,14 +573,17 @@ if st.session_state.uploaded_files and data_types_to_process:
                         })
                     
                     with col2:
-                        st.download_button(
+                        if st.download_button(
                             "📄 Baixar Todos os Registros Extraídos (XLSX)",
                             data=output_todos.getvalue(),
                             file_name="todos_registros_extraidos.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True,
-                            on_click=lambda: (st.session_state.update({"uploaded_files": {}}), time.sleep(0.5))
-                        )
+                            use_container_width=True
+                        ):
+                            st.session_state.uploaded_files = {}
+                            st.success("Dados limpos com sucesso. Reiniciando...")
+                            time.sleep(1)
+                            st.rerun()
                     
                     # Informação para o usuário sobre o que foi feito
                     st.info("""
