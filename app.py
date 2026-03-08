@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import io
 import os
+import time
 
 # --- Funções Aprimoradas para Normalização ---
 
@@ -298,18 +299,6 @@ if new_files:
     for f in new_files:
         if f.name not in st.session_state.uploaded_files:
             st.session_state.uploaded_files[f.name] = f
-        else:
-            # Opcional: Podíamos fazer verificação por Hash aqui para ser ultra seguro
-            pass
-
-if st.session_state.uploaded_files:
-    with st.expander("Ver arquivos adicionados", expanded=False):
-        for fname in list(st.session_state.uploaded_files.keys()):
-            col_f, col_del = st.columns([4, 1])
-            col_f.text(f"📄 {fname}")
-            if col_del.button("Remover", key=f"del_{fname}"):
-                del st.session_state.uploaded_files[fname]
-                st.rerun()
 
 # --- Detectar Cabeçalho ---
 
@@ -537,7 +526,8 @@ if st.session_state.uploaded_files and data_types_to_process:
                             data=output_cruzamentos.getvalue(),
                             file_name="cruzamentos_telematicos.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
+                            use_container_width=True,
+                            on_click=lambda: (st.session_state.update({"uploaded_files": {}}), time.sleep(0.5))
                         )
                     
                     # 2. Download de todos os registros extraídos
@@ -585,7 +575,8 @@ if st.session_state.uploaded_files and data_types_to_process:
                             data=output_todos.getvalue(),
                             file_name="todos_registros_extraidos.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
+                            use_container_width=True,
+                            on_click=lambda: (st.session_state.update({"uploaded_files": {}}), time.sleep(0.5))
                         )
                     
                     # Informação para o usuário sobre o que foi feito
