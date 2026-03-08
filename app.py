@@ -564,8 +564,8 @@ if st.session_state.uploaded_files and data_types_to_process:
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True
                         ):
-                            st.session_state.uploaded_files = {}
-                            st.success("Dados limpos com sucesso. Reiniciando...")
+                            st.session_state.clear()
+                            st.success("Dados limpos com sucesso. Reiniciando sistema...")
                             time.sleep(1)
                             st.rerun()
                     
@@ -616,19 +616,13 @@ if st.session_state.uploaded_files and data_types_to_process:
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                             use_container_width=True
                         ):
-                            st.session_state.uploaded_files = {}
-                            st.success("Dados limpos com sucesso. Reiniciando...")
+                            st.session_state.clear()
+                            st.success("Dados limpos com sucesso. Reiniciando sistema...")
                             time.sleep(1)
                             st.rerun()
-                    
-                    # Informação para o usuário sobre o que foi feito
-                    st.info("""
-                    **Análise concluída!**
-                    
-                    - Os **cruzamentos identificados** são exibidos na tabela acima
-                    - Use o botão de download para obter a planilha completa com os cruzamentos destacados por nível de confiança
-                    - Use o botão "Baixar Todos os Registros Extraídos" para ter acesso a todos os dados extraídos das planilhas
-                    """)
+                        
+                        # Informação para o usuário
+                        st.info("**Sessão Segura**: Ao realizar o download, todos os dados serão permanentemente apagados do servidor.")
 
             progress.progress(1.0)
 
