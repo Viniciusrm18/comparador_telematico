@@ -232,6 +232,25 @@ footer, .reportview-container .main footer {visibility: hidden;}
 .stTabs [data-baseweb="tab-list"] {gap: 2px;}
 .stTabs [data-baseweb="tab"] {height: 50px; white-space: pre-wrap; background-color: #0E1117; border-radius: 4px 4px 0 0; gap: 1px; padding-top: 10px; padding-bottom: 10px;}
 .stTabs [aria-selected="true"] {background-color: #4F8BF9;}
+/* Estilo para o botão principal de processamento */
+div.stButton > button[kind="primary"] {
+    background-color: #00CC66;
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    height: 60px;
+    border-radius: 10px;
+    border: none;
+    box-shadow: 0 4px 15px rgba(0, 204, 102, 0.3);
+    transition: all 0.3s ease;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+div.stButton > button[kind="primary"]:hover {
+    background-color: #00B359;
+    box-shadow: 0 6px 20px rgba(0, 204, 102, 0.5);
+    transform: translateY(-2px);
+}
 /* Esconder a lista nativa do file_uploader para evitar confusão com o limite de 3 arquivos */
 [data-testid="stFileUploadDropzone"] + div {
     display: none;
@@ -364,7 +383,7 @@ def detectar_cabecalho(file, filename, max_linhas=15):
 # Checar se há arquivos
 if st.session_state.uploaded_files and data_types_to_process:
 
-    if st.button("Processar Dados e Cruzar"):
+    if st.button("🚀 Processar Dados e Cruzar AGORA", type="primary", use_container_width=True):
         st.subheader("Status:")
         status_area = st.empty()
         progress = st.progress(0.0)
