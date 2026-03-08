@@ -464,12 +464,6 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                             "ocorrencias": len(grupo)
                         }
                         
-                        # Adicionar dados complementares
-                        for comp in selected_complementary:
-                            if comp in grupo.columns:
-                                valores_comp = grupo[comp].dropna().unique()
-                                cruzamento[comp] = list(valores_comp) if len(valores_comp) > 0 else []
-                        
                         cruzamentos.append(cruzamento)
                 
                 df_cruzado = pd.DataFrame(cruzamentos)
