@@ -256,11 +256,11 @@ with st.expander("Clique para Ajuda e Objetivo da Ferramenta"):
 
         **Passos:**
         1. Escolha o tipo de análise (ERBs ou Contas Google).
-        2. Envie os arquivos separados por blocos (ex: Local A, Local B).
-        3. O sistema identificará automaticamente Colunas de Origem/Destino/IMEI.
+        2. Envie todas as planilhas para a área "Adicionar Planilhas".
+        3. O sistema identificará automaticamente Colunas de Origem/Destino/IMEI/E-mail.
         4. Clique em "Processar Dados e Cruzar".
     
-        Obs: Cada Bloco de análise é referente a uma ERB ou antena, por isso é necessário colocar as planilhas de cada antena em blocos separados para o sistema realizar o cruzamento de dados entre os blocos.
+        O sistema encontrará automaticamente dados que se repetem em arquivos diferentes no seu acervo.
         
         **Níveis de Confiança nos Dados:**
         - **Alta (Verde)**: Dados em formato padrão completo
@@ -286,27 +286,30 @@ if analysis_type != "-- Selecione --":
 strict_mode = False  # Modo permissivo por padrão
 niveis_confianca = ["baixa", "média", "alta"]  # Incluir todos os níveis de confiança
 
-# --- Upload por Bloco ---
+# --- Upload de Arquivos ---
 
-if 'file_blocks' not in st.session_state:
-    st.session_state.file_blocks = {}
-if 'block_count' not in st.session_state:
-    st.session_state.block_count = 0
+if 'uploaded_files' not in st.session_state:
+    st.session_state.uploaded_files = {} # Dict de filename: file_object
 
-col_add, col_opt = st.columns([1, 1])
-with col_add:
-    if st.button("Adicionar Bloco de Arquivos"):
-        st.session_state.block_count += 1
-        st.session_state.file_blocks[f"Bloco {st.session_state.block_count}"] = {}
+st.header("Adicionar Planilhas")
+new_files = st.file_uploader("Arraste ou selecione as planilhas aqui", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
 
-with col_opt:
-    detec_interna = st.checkbox("Detectar duplicatas dentro do mesmo bloco", value=False, help="Se marcado, mostrará repetidos mesmo que estejam no mesmo grupo de arquivos.")
+if new_files:
+    for f in new_files:
+        if f.name not in st.session_state.uploaded_files:
+            st.session_state.uploaded_files[f.name] = f
+        else:
+            # Opcional: Podíamos fazer verificação por Hash aqui para ser ultra seguro
+            pass
 
-for i in range(1, st.session_state.block_count + 1):
-    block_id = f"Bloco {i}"
-    files = st.file_uploader(f"Arquivos para {block_id}", type=["csv", "xlsx", "xls"], accept_multiple_files=True, key=f"uploader_{i}")
-    if files:
-        st.session_state.file_blocks[block_id] = {f.name: f for f in files}
+if st.session_state.uploaded_files:
+    with st.expander("Ver arquivos adicionados", expanded=False):
+        for fname in list(st.session_state.uploaded_files.keys()):
+            col_f, col_del = st.columns([4, 1])
+            col_f.text(f"📄 {fname}")
+            if col_del.button("Remover", key=f"del_{fname}"):
+                del st.session_state.uploaded_files[fname]
+                st.rerun()
 
 # --- Detectar Cabeçalho ---
 
@@ -339,48 +342,45 @@ def detectar_cabecalho(file, filename, max_linhas=15):
 
 # --- Complementares ---
 
-# Checar se todos os blocos possuem pelo menos um arquivo
-blocos_preenchidos = all(bool(arquivos) for arquivos in st.session_state.file_blocks.values())
-
-if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos:
+# Checar se há arquivos
+if st.session_state.uploaded_files and data_types_to_process:
 
     if st.button("Processar Dados e Cruzar"):
         st.subheader("Status:")
         status_area = st.empty()
         progress = st.progress(0.0)
-        dataframes_por_bloco, erros, registros = [], [], []
+        dataframes_por_arquivo, erros = [], []
         contador = 0
-        total_arquivos = sum(len(bloco) for bloco in st.session_state.file_blocks.values())
+        total_arquivos = len(st.session_state.uploaded_files)
 
-        for bloco_id, arquivos in st.session_state.file_blocks.items():
-            for nome_arquivo, file in arquivos.items():
-                contador += 1
-                status_area.text(f"Lendo: {nome_arquivo} ({bloco_id})")
-                try:
-                    header_row = detectar_cabecalho(file, nome_arquivo)
-                    file.seek(0)
-                    if nome_arquivo.lower().endswith(".csv"):
-                        df = pd.read_csv(file, header=header_row, dtype=str, encoding='utf-8', sep=None, engine='python')
+        for nome_arquivo, file in st.session_state.uploaded_files.items():
+            contador += 1
+            status_area.text(f"Lendo: {nome_arquivo}")
+            try:
+                header_row = detectar_cabecalho(file, nome_arquivo)
+                file.seek(0)
+                if nome_arquivo.lower().endswith(".csv"):
+                    df = pd.read_csv(file, header=header_row, dtype=str, encoding='utf-8', sep=None, engine='python')
+                else:
+                    if nome_arquivo.lower().endswith(".xlsx"):
+                        engine = 'openpyxl'
+                    elif nome_arquivo.lower().endswith(".xls"):
+                        engine = 'xlrd'
                     else:
-                        if nome_arquivo.lower().endswith(".xlsx"):
-                            engine = 'openpyxl'
-                        elif nome_arquivo.lower().endswith(".xls"):
-                            engine = 'xlrd'
-                        else:
-                            engine = None
-                        df = pd.read_excel(file, header=header_row, dtype=str, engine=engine)
-                    
-                    # Limpeza inicial: remover 'nan'
-                    df = df.fillna("")
-                    # Standardizing columns
-                    df.columns = [str(col).strip().lower() for col in df.columns]
-                    dataframes_por_bloco.append({"df": df, "bloco": bloco_id, "nome": nome_arquivo})
-                except Exception as e:
-                    erros.append(f"{nome_arquivo} ({bloco_id}) -> Erro: {e}")
-                progress.progress(contador / total_arquivos * 0.3)
+                        engine = None
+                    df = pd.read_excel(file, header=header_row, dtype=str, engine=engine)
+                
+                # Limpeza inicial: remover 'nan'
+                df = df.fillna("")
+                # Standardizing columns
+                df.columns = [str(col).strip().lower() for col in df.columns]
+                dataframes_por_arquivo.append({"df": df, "nome": nome_arquivo})
+            except Exception as e:
+                erros.append(f"{nome_arquivo} -> Erro: {e}")
+            progress.progress(contador / total_arquivos * 0.3)
 
-        if len(dataframes_por_bloco) < 2:
-            st.error("Necessário ao menos dois blocos com arquivos válidos.")
+        if len(dataframes_por_arquivo) < 1:
+            st.error("Necessário ao menos um arquivo válido.")
         else:
             normalizadores = {
                 "telefone": lambda x: normalizar_telefone(x, strict_mode),
@@ -394,8 +394,8 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
             # Armazenar todos os dados extraídos com seus níveis de confiança
             todos_registros = []
 
-            for bloco in dataframes_por_bloco:
-                df, bloco_id, nome_arquivo = bloco["df"], bloco["bloco"], bloco["nome"]
+            for bloco in dataframes_por_arquivo:
+                df, nome_arquivo = bloco["df"], bloco["nome"]
                 
                 # Primeiro, vamos identificar as colunas para cada tipo de dado
                 colunas_por_tipo = {}
@@ -421,7 +421,6 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                                     "valor": valor_normalizado,
                                     "tipo": tipo,
                                     "confianca": confianca,
-                                    "bloco": bloco_id,
                                     "arquivo": nome_arquivo,
                                     "valor_original": row[col],
                                     "coluna_fonte": col
@@ -439,31 +438,21 @@ if st.session_state.file_blocks and data_types_to_process and blocos_preenchidos
                 # Filtrar por nível de confiança (usando todos os níveis por padrão)
                 df_filtrado = df_todos[df_todos["confianca"].isin(niveis_confianca)]
                 
-                # Identificar cruzamentos entre blocos
+                # Identificar cruzamentos
                 cruzamentos = []
-                for valor, grupo in df_filtrado.groupby(["valor", "tipo"]):
-                    blocos_unicos = grupo["bloco"].unique()
+                for (valor, tipo), grupo in df_filtrado.groupby(["valor", "tipo"]):
                     arquivos_unicos = grupo["arquivo"].unique()
                     
-                    encontrado = False
-                    if detec_interna:
-                        if len(grupo) > 1: # Qualquer repetição
-                            encontrado = True
-                    else:
-                        if len(blocos_unicos) > 1: # Repetição entre blocos diferentes
-                            encontrado = True
-                            
-                    if encontrado:
+                    # Cruzamento ocorre se o mesmo valor aparece em arquivos diferentes
+                    if len(arquivos_unicos) > 1:
                         cruzamento = {
-                            "valor": valor[0],
-                            "tipo": valor[1],
-                            "confianca": grupo["confianca"].max(), # Pega a maior confiança encontrada para esse valor
-                            "blocos": list(blocos_unicos),
+                            "valor": valor,
+                            "tipo": tipo,
+                            "confianca": grupo["confianca"].max(),
                             "arquivos": list(arquivos_unicos),
                             "colunas": list(grupo["coluna_fonte"].unique()),
                             "ocorrencias": len(grupo)
                         }
-                        
                         cruzamentos.append(cruzamento)
                 
                 df_cruzado = pd.DataFrame(cruzamentos)
