@@ -295,7 +295,12 @@ with st.expander("Clique para Ajuda e Objetivo da Ferramenta"):
 # --- Tipo de Análise ---
 
 st.header("Configurar Análise")
-analysis_type = st.selectbox("Tipo de Análise:", ["-- Selecione --", "Extratos de ERBs", "Dados de Contas Online (Google Location)"])
+col1, col2 = st.columns(2)
+with col1:
+    analysis_type = st.selectbox("Tipo de Análise:", ["-- Selecione --", "Extratos de ERBs", "Dados de Contas Online (Google Location)"])
+with col2:
+    modo_processamento = st.selectbox("Modo de Processamento:", ["Processar em blocos de analise", "Processar em um bloco unico"])
+
 ANALYSIS_TYPE_MAPPING = {
     "Extratos de ERBs": ["telefone", "imei"],
     "Dados de Contas Online (Google Location)": ["id_localizacao", "email", "hash"]
@@ -303,7 +308,7 @@ ANALYSIS_TYPE_MAPPING = {
 data_types_to_process = ANALYSIS_TYPE_MAPPING.get(analysis_type, [])
 
 if analysis_type != "-- Selecione --":
-    st.info(f"Tipos a cruzar: {', '.join([t.upper() for t in data_types_to_process])}")
+    st.info(f"Tipos a cruzar: {', '.join([t.upper() for t in data_types_to_process])} no modo '{modo_processamento}'")
 
 # --- Removendo Filtros de Usuário para Nível de Confiança e Rigor ---
 # Definindo valores padrão
@@ -312,41 +317,79 @@ niveis_confianca = ["baixa", "média", "alta"]  # Incluir todos os níveis de co
 
 # --- Upload de Arquivos ---
 
+if 'blocos' not in st.session_state:
+    st.session_state.blocos = {1: {}} # Dict de arquivos por bloco
+if 'bloco_count' not in st.session_state:
+    st.session_state.bloco_count = 1
 if 'uploaded_files' not in st.session_state:
-    st.session_state.uploaded_files = {} # Dict de filename: file_object
+    st.session_state.uploaded_files = {} # Dict de filename: file_object para bloco unico
 
-st.header("Adicionar Planilhas")
-new_files = st.file_uploader("Arraste ou selecione as planilhas aqui", type=["csv", "xlsx", "xls"], accept_multiple_files=True)
+st.header("Adicionar Planilhas" if modo_processamento == "Processar em um bloco unico" else "Adicionar Blocos de Planilhas")
 
-if new_files:
-    for f in new_files:
-        if f.name not in st.session_state.uploaded_files:
-            st.session_state.uploaded_files[f.name] = f
+if modo_processamento == "Processar em um bloco unico":
+    new_files = st.file_uploader("Arraste ou selecione as planilhas aqui", type=["csv", "xlsx", "xls"], accept_multiple_files=True, key="uploader_unico")
 
-# Mostrar lista personalizada de arquivos (Até 20 por tela)
-if st.session_state.uploaded_files:
-    st.subheader(f"Arquivos no Acervo ({len(st.session_state.uploaded_files)})")
-    
-    arquivos_lista = sorted(list(st.session_state.uploaded_files.keys()))
-    itens_por_pagina = 20
-    
-    if len(arquivos_lista) > itens_por_pagina:
-        total_paginas = (len(arquivos_lista) // itens_por_pagina) + (1 if len(arquivos_lista) % itens_por_pagina > 0 else 0)
-        pagina = st.number_input("Página da lista de arquivos", min_value=1, max_value=total_paginas, step=1)
-        inicio = (pagina - 1) * itens_por_pagina
-        fim = inicio + itens_por_pagina
-    else:
-        inicio, fim = 0, len(arquivos_lista)
+    if new_files:
+        for f in new_files:
+            if f.name not in st.session_state.uploaded_files:
+                st.session_state.uploaded_files[f.name] = f
+
+    # Mostrar lista personalizada de arquivos (Até 20 por tela)
+    if st.session_state.uploaded_files:
+        st.subheader(f"Arquivos no Acervo ({len(st.session_state.uploaded_files)})")
         
-    for fname in arquivos_lista[inicio:fim]:
-        col_f, col_del = st.columns([5, 1])
-        col_f.markdown(f"✅ `{fname}`")
-        if col_del.button("❌", key=f"del_{fname}"):
-            del st.session_state.uploaded_files[fname]
+        arquivos_lista = sorted(list(st.session_state.uploaded_files.keys()))
+        itens_por_pagina = 20
+        
+        if len(arquivos_lista) > itens_por_pagina:
+            total_paginas = (len(arquivos_lista) // itens_por_pagina) + (1 if len(arquivos_lista) % itens_por_pagina > 0 else 0)
+            pagina = st.number_input("Página da lista de arquivos", min_value=1, max_value=total_paginas, step=1)
+            inicio = (pagina - 1) * itens_por_pagina
+            fim = inicio + itens_por_pagina
+        else:
+            inicio, fim = 0, len(arquivos_lista)
+            
+        for fname in arquivos_lista[inicio:fim]:
+            col_f, col_del = st.columns([5, 1])
+            col_f.markdown(f"✅ `{fname}`")
+            if col_del.button("❌", key=f"del_unico_{fname}"):
+                del st.session_state.uploaded_files[fname]
+                st.rerun()
+        
+        if st.button("Limpar Todo o Acervo", type="secondary"):
+            st.session_state.uploaded_files = {}
             st.rerun()
-    
-    if st.button("Limpar Todo o Acervo", type="secondary"):
-        st.session_state.uploaded_files = {}
+else:
+    if st.button("➕ Adicionar Bloco de Análise"):
+        st.session_state.bloco_count += 1
+        st.session_state.blocos[st.session_state.bloco_count] = {}
+        st.rerun()
+        
+    for b_id in list(st.session_state.blocos.keys()):
+        st.markdown(f"### Bloco {b_id}")
+        new_files = st.file_uploader(f"Planilhas do Bloco {b_id}", type=["csv", "xlsx", "xls"], accept_multiple_files=True, key=f"uploader_b{b_id}")
+        if new_files:
+            for f in new_files:
+                if f.name not in st.session_state.blocos[b_id]:
+                    st.session_state.blocos[b_id][f.name] = f
+                    
+        arquivos_bloco = st.session_state.blocos[b_id]
+        if arquivos_bloco:
+            for fname in sorted(list(arquivos_bloco.keys())):
+                col_f, col_del = st.columns([5, 1])
+                col_f.markdown(f"✅ `{fname}`")
+                if col_del.button("❌", key=f"del_b{b_id}_{fname}"):
+                    del st.session_state.blocos[b_id][fname]
+                    st.rerun()
+        
+        if st.button(f"🗑️ Remover Bloco {b_id}", key=f"rem_b{b_id}"):
+            del st.session_state.blocos[b_id]
+            st.rerun()
+        st.divider()
+        
+    if st.button("Limpar Todos os Blocos", type="secondary"):
+        st.session_state.blocos = {1: {}}
+        st.session_state.bloco_count = 1
         st.rerun()
 
 # --- Detectar Cabeçalho ---
@@ -381,7 +424,13 @@ def detectar_cabecalho(file, filename, max_linhas=15):
 # --- Complementares ---
 
 # Checar se há arquivos
-if st.session_state.uploaded_files and data_types_to_process:
+tem_arquivos = False
+if modo_processamento == "Processar em um bloco unico":
+    tem_arquivos = bool(st.session_state.uploaded_files)
+else:
+    tem_arquivos = any(bool(arquivos) for arquivos in st.session_state.blocos.values())
+
+if tem_arquivos and data_types_to_process:
 
     if st.button("Processar e Cruzar Dados", type="primary", use_container_width=True):
         st.subheader("Status:")
@@ -389,11 +438,28 @@ if st.session_state.uploaded_files and data_types_to_process:
         progress = st.progress(0.0)
         dataframes_por_arquivo, erros = [], []
         contador = 0
-        total_arquivos = len(st.session_state.uploaded_files)
+        
+        lista_arquivos_processar = []
+        if modo_processamento == "Processar em um bloco unico":
+            total_arquivos = len(st.session_state.uploaded_files)
+            for nome_arquivo, file in st.session_state.uploaded_files.items():
+                lista_arquivos_processar.append((nome_arquivo, file, 0)) # bloco 0 = unico
+        else:
+            total_arquivos = sum(len(arquivos) for arquivos in st.session_state.blocos.values())
+            for b_id, arquivos in st.session_state.blocos.items():
+                for nome_arquivo, file in arquivos.items():
+                    lista_arquivos_processar.append((nome_arquivo, file, b_id))
 
-        for nome_arquivo, file in st.session_state.uploaded_files.items():
+        if total_arquivos == 0:
+            st.error("Adicione ao menos um arquivo válido.")
+            st.stop()
+
+        for nome_arquivo, file, bloco_id in lista_arquivos_processar:
             contador += 1
-            status_area.text(f"Lendo: {nome_arquivo}")
+            if bloco_id == 0:
+                status_area.text(f"Lendo: {nome_arquivo}")
+            else:
+                status_area.text(f"Lendo (Bloco {bloco_id}): {nome_arquivo}")
             try:
                 header_row = detectar_cabecalho(file, nome_arquivo)
                 file.seek(0)
@@ -412,7 +478,7 @@ if st.session_state.uploaded_files and data_types_to_process:
                 df = df.fillna("")
                 # Standardizing columns
                 df.columns = [str(col).strip().lower() for col in df.columns]
-                dataframes_por_arquivo.append({"df": df, "nome": nome_arquivo})
+                dataframes_por_arquivo.append({"df": df, "nome": nome_arquivo, "bloco": bloco_id})
             except Exception as e:
                 erros.append(f"{nome_arquivo} -> Erro: {e}")
             progress.progress(contador / total_arquivos * 0.3)
@@ -460,6 +526,7 @@ if st.session_state.uploaded_files and data_types_to_process:
                                     "tipo": tipo,
                                     "confianca": confianca,
                                     "arquivo": nome_arquivo,
+                                    "bloco": bloco["bloco"],
                                     "valor_original": row[col],
                                     "coluna_fonte": col
                                 }
@@ -479,19 +546,37 @@ if st.session_state.uploaded_files and data_types_to_process:
                 # Identificar cruzamentos
                 cruzamentos = []
                 for (valor, tipo), grupo in df_filtrado.groupby(["valor", "tipo"]):
-                    arquivos_unicos = grupo["arquivo"].unique()
-                    
-                    # Cruzamento ocorre se o mesmo valor aparece em arquivos diferentes
-                    if len(arquivos_unicos) > 1:
-                        cruzamento = {
-                            "valor": valor,
-                            "tipo": tipo,
-                            "confianca": grupo["confianca"].max(),
-                            "arquivos": list(arquivos_unicos),
-                            "colunas": list(grupo["coluna_fonte"].unique()),
-                            "ocorrencias": len(grupo)
-                        }
-                        cruzamentos.append(cruzamento)
+                    if modo_processamento == "Processar em um bloco unico":
+                        arquivos_unicos = grupo["arquivo"].unique()
+                        
+                        # Cruzamento ocorre se o mesmo valor aparece em arquivos diferentes
+                        if len(arquivos_unicos) > 1:
+                            cruzamento = {
+                                "valor": valor,
+                                "tipo": tipo,
+                                "confianca": grupo["confianca"].max(),
+                                "arquivos": list(arquivos_unicos),
+                                "blocos": ["Único"],
+                                "colunas": list(grupo["coluna_fonte"].unique()),
+                                "ocorrencias": len(grupo)
+                            }
+                            cruzamentos.append(cruzamento)
+                    else:
+                        blocos_unicos = grupo["bloco"].unique()
+                        arquivos_unicos = grupo["arquivo"].unique()
+                        
+                        # Cruzamento ocorre se o mesmo valor aparece em BLOCOS diferentes
+                        if len(blocos_unicos) > 1:
+                            cruzamento = {
+                                "valor": valor,
+                                "tipo": tipo,
+                                "confianca": grupo["confianca"].max(),
+                                "arquivos": list(arquivos_unicos),
+                                "blocos": list(blocos_unicos),
+                                "colunas": list(grupo["coluna_fonte"].unique()),
+                                "ocorrencias": len(grupo)
+                            }
+                            cruzamentos.append(cruzamento)
                 
                 df_cruzado = pd.DataFrame(cruzamentos)
                 
@@ -500,6 +585,11 @@ if st.session_state.uploaded_files and data_types_to_process:
                     conf_map = {"alta": 0, "média": 1, "baixa": 2}
                     df_cruzado["_priority"] = df_cruzado["confianca"].map(conf_map)
                     df_cruzado = df_cruzado.sort_values(by=["ocorrencias", "_priority"], ascending=[False, True]).drop(columns=["_priority"])
+                    
+                    # Converter listas em strings para exibição na tabela e exportação correta no Excel
+                    for col in ["arquivos", "blocos", "colunas"]:
+                        if col in df_cruzado.columns:
+                            df_cruzado[col] = df_cruzado[col].apply(lambda x: ", ".join(map(str, x)) if isinstance(x, list) else x)
                 
                 # Mostrar resultados
                 if df_cruzado.empty:
