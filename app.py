@@ -219,13 +219,15 @@ st.set_page_config("Comparador Investigativo de Dados Telemáticos", layout="wid
 st.markdown("""
 <style>
 footer, .reportview-container .main footer {visibility: hidden;}
+.stAppDeployButton {display: none !important;}
+.stDeployButton {display: none !important;}
+button[data-testid="stHeaderDeployButton"] {display: none !important;}
 .stButton>button {
     width: 100%; background-color: #0E1117; color: white; border: 1px solid #4F8BF9;
 }
 .stButton>button:hover {
     background-color: #4F8BF9; color: black;
 }
-.footer {position: fixed; bottom: 0; width: 100%; background: #0E1117; color: white; text-align: center; font-size: 12px;}
 .alta-confianca {color: green; font-weight: bold;}
 .media-confianca {color: orange;}
 .baixa-confianca {color: red; font-style: italic;}
@@ -269,7 +271,6 @@ div.stButton > button[kind="primary"]:hover {
     background-color: #45a049;
 }
 </style>
-<div class="footer">Desenvolvido por VINÍCIUS RIBEIRO @ CIIDS | <a href="mailto:viniciusrm18@gmail.com">viniciusrm18@gmail.com</a></div>
 """, unsafe_allow_html=True)
 
 st.title("Comparador Investigativo de Dados Telemáticos")

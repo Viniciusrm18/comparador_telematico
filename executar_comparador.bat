@@ -26,7 +26,7 @@ pip install streamlit pandas openpyxl xlsxwriter
 
 :: Executa o sistema
 echo [+] Iniciando o sistema...
-streamlit run app.py
+streamlit run app.py --server.headless=true
 
 endlocal
 pause
